@@ -27,6 +27,74 @@ const app = express();
 app.use(express.json());
 
 // -------------------- helper para enviar mensajes --------------------
+// -------------------- textos base para el bot --------------------
+
+// Texto de bienvenida general
+const WELCOME_TEXT =
+  "🌈✨ Bienvenid@ al rincón más dulce del viaje, soy Pastelito High 🍪💨.\n" +
+  "Aquí todo está listo pa’ endulzarte la vida y llevarte a otro nivel 🚀.\n\n" +
+  "👉 *Qué puedo hacer por ti:*\n" +
+  "• Mostrarte el menú completo y las promos activas 🧁🍬🍪\n" +
+  "• Recomendarte combos según tu vuelo y presupuesto 😏\n" +
+  "• Explicarte las opciones de pago y envío 💸🚚\n\n" +
+  "Respóndeme con lo que buscas, por ejemplo:\n" +
+  "» *“Menú”* · *“Promos”* · *“Combos”* · *“Envíos”* · *“Pago”* · *“Contra entrega”*.";
+
+// Texto sobre opciones de envío (3 formas)
+const ENVIOS_DETALLE =
+  "🚚 *Opciones de envío Candy Shop 420*\n\n" +
+  "1️⃣ *Moto en Bogotá (envío rápido)*\n" +
+  "• Haces el pago anticipado por llave Bre-B.\n" +
+  "• Verificamos el pago y pedimos motero por app.\n" +
+  "• El domi llega hoy mismo (según la zona).\n" +
+  "• El valor del envío se paga en efectivo al domiciliario al recibir.\n\n" +
+  "2️⃣ *Interrapidísimo prepago (a todo el país)*\n" +
+  "• Pagas primero el valor de los productos por llave.\n" +
+  "• Enviamos por Interrapidísimo.\n" +
+  "• El pedido puede tardar de *1 a 3 días hábiles* según tu ciudad.\n" +
+  "• El envío lo pagas al recibir en la transportadora.\n\n" +
+  "3️⃣ *Pago contra entrega con Interrapidísimo*\n" +
+  "• Pedido mínimo: *45.000 COP*.\n" +
+  "• Se cobra un *5% adicional* sobre el valor del pedido.\n" +
+  "• Además pagas el valor del envío (varía según ciudad).\n" +
+  "• Pagas todo cuando recibes el paquete.\n\n" +
+  "Si me mandas tu dirección (barrio/ciudad) te cotizo costo de envío y tiempo estimado de llegada 😉";
+
+// Detalle específico de contra entrega (versión larga)
+const CONTRA_ENTREGA_DETALLE =
+  "📦 *Pago contra entrega con Interrapidísimo*\n\n" +
+  "El pago contra entrega se maneja bajo las normas de Interrapidísimo:\n\n" +
+  "• *Pedido mínimo:* 45.000 COP\n" +
+  "• *Recargo:* 5% del valor del pedido\n" +
+  "• *Más:* valor del envío (varía según ciudad)\n\n" +
+  "Ejemplo: el 5% de 45k = 2.400.\n\n" +
+  "Compárteme tu dirección de entrega y te digo costo de envío y tiempo estimado de llegada 🕒";
+
+// Versión Bogotá que tú usas mucho
+const CONTRA_ENTREGA_BOGOTA =
+  "📦 *Pago contra entrega Bogotá (Interrapidísimo)*\n\n" +
+  "Pedido mínimo de *45k* + el *5%* del valor del pedido + valor del envío.\n" +
+  "Ej: el 5% de 45k = 2.400.\n\n" +
+  "En Bogotá el envío suele estar alrededor de 10k y llegaría mañana (dependiendo de la hora en que hagamos el envío).\n\n" +
+  "También puedes *recoger sin costo de envío* en:\n" +
+  "• Estación Banderas 🚉\n" +
+  "• Plaza de las Américas, entrada principal 🏬 (hasta las 10 pm)";
+
+// Texto de pago por llave Bre-B / DaviPlata
+const PAGO_LLAVE =
+  "💸 *Págame fácil desde cualquier banco*\n\n" +
+  "Solo envía el valor del pedido a esta llave DaviPlata / Bre-B 👇\n\n" +
+  "@PLATA3027102711\n\n" +
+  "Funciona con cualquier entidad bancaria, no necesitas número de cuenta.\n\n" +
+  "✨ Cuando hagas el pago, mándame pantallazo y seguimos con el envío.\n" +
+  "Recuerda: el valor del domi lo cancelas en casa al recibir 🚚";
+
+// Texto corto cuando ya están listos para pagar
+const PAGO_LISTONES =
+  "Listones, te dejo la llave de Bre-B para que puedas ir haciendo el pago 🧾:\n\n" +
+  "@PLATA3027102711\n\n" +
+  "Recuerda: solo el valor del producto, el valor del domi lo cancelas en casa al recibir 🙌";
+
 async function sendWhatsApp(payload) {
   try {
     const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
