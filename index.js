@@ -1,150 +1,162 @@
+// index.js
+// Bot de WhatsApp de Pastelito High 💚
+
+// -------------------- dependencias --------------------
 const express = require("express");
 const axios = require("axios");
 
+// -------------------- config (variables de entorno) --------------------
+// ESTO NO LO CAMBIAS AQUÍ. Se llena en Render como variables de entorno.
+const PORT = process.env.PORT || 3000;
+
+// Token de verificación para el webhook (tú inventas una palabra, ej: pastelito_verify)
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+
+// Token de acceso de la API de WhatsApp (el que te dio Meta)
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+
+// ID del número de WhatsApp (el "Identificador de número de teléfono" que viste en Meta,
+// por ahora el de PRUEBA, más adelante lo cambias por el de tu número real desde Render)
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+
+// URL de la imagen del menú
+const MENU_IMAGE_URL = "https://i.imgur.com/RPp27bH.jpeg";
+
+// -------------------- app express --------------------
 const app = express();
 app.use(express.json());
 
-// ------------------------------------------------------
-// 🔥 CONFIG — PÓN TUS DATOS AQUÍ COMO VARIABLES DE ENTORNO EN RENDER
-// ------------------------------------------------------
-// En Render vas a crear:
-// WHATSAPP_TOKEN   -> el token largo que te da Meta
-// PHONE_NUMBER_ID  -> el ID del número (el que sale en Meta en "Identificador de número")
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+// -------------------- helper para enviar mensajes --------------------
+async function sendWhatsApp(payload) {
+  try {
+    const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
 
-// 🔸 URL de la imagen del menú (reemplázala por tu link DIRECTO de Imgur)
-const IMAGE_MENU_URL = "https://i.imgur.com/RPp27bH.jpeg"; 
-// EJEMPLO: "https://i.imgur.com/abcd1234.png"
+    await axios.post(url, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      },
+    });
 
-// ------------------------------------------------------
-// 🔔 WEBHOOK DE VERIFICACIÓN (GET)
-// ------------------------------------------------------
+    console.log("✅ Mensaje enviado a WhatsApp:", JSON.stringify(payload, null, 2));
+  } catch (error) {
+    console.error("❌ Error enviando mensaje a WhatsApp:");
+    if (error.response) {
+      console.error("Status:", error.response.status);
+      console.error("Data:", error.response.data);
+    } else {
+      console.error(error.message);
+    }
+  }
+}
+
+// -------------------- lógica de respuesta --------------------
+async function handleIncomingMessage(message, from) {
+  const text = message.text?.body?.toLowerCase() || "";
+
+  console.log("📩 Mensaje recibido de", from, "=>", text);
+
+  // Por ahora: cualquier cosa que escriban, les mandamos bienvenida + menú
+  // Luego le metemos más lógica (pedidos, pagos, etc.)
+
+  // 1) Imagen del menú con copy de Pastelito
+  const imageMessage = {
+    messaging_product: "whatsapp",
+    to: from,
+    type: "image",
+    image: {
+      link: MENU_IMAGE_URL,
+      caption:
+        "💚 Aquí te dejo el menú actualizado de nuestros antojitos con truco 🌈\n" +
+        "Hay pa’ todos los gustos y niveles de vuelo 🚀\n\n" +
+        "Revísalo con calma y dime qué se te antoja… que yo te ayudo a armar el combo perfecto pa’ tu viaje 🧁🍬🍪💨\n" +
+        "¡Pastelito High te guía! 😋💫",
+    },
+  };
+
+  // 2) Mensaje de bienvenida + instrucciones básicas (se puede mejorar después)
+  const welcomeText =
+    "🌈✨ Bienvenid@ al rincón más dulce del viaje, soy Pastelito High 🍪💨.\n" +
+    "Aquí todo está listo pa’ endulzarte la vida y llevarte a otro nivel 🚀.\n\n" +
+    "👉 *Cómo funciona esto:*\n" +
+    "1️⃣ Me dices qué se te antoja del menú (por nombre del producto).\n" +
+    "2️⃣ Te ayudo a armar combo según tu vuelo y presupuesto.\n" +
+    "3️⃣ Te confirmo total, forma de pago y envío.\n\n" +
+    "💸 *Pagos:*\n" +
+    "- Nequi\n" +
+    "- Transferencias a otros bancos (según lo que tengamos activo)\n\n" +
+    "🚚 *Envíos:* Bogotá por app de domicilios (te digo el valor según tu dirección). " +
+    "Contraentrega la manejamos solo en algunos puntos y horarios especiales.\n\n" +
+    "Cuando quieras, respóndeme con lo que se te antoja y lo vamos armando 🍬";
+
+  const textMessage = {
+    messaging_product: "whatsapp",
+    to: from,
+    type: "text",
+    text: {
+      body: welcomeText,
+    },
+  };
+
+  await sendWhatsApp(imageMessage);
+  await sendWhatsApp(textMessage);
+}
+
+// -------------------- endpoints del webhook --------------------
+
+// Verificación inicial del webhook (Meta llama con GET)
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
-  const challenge = req.query["hub.challenge"];
   const token = req.query["hub.verify_token"];
-
-  // Debe coincidir con el token que pongas en Meta cuando configures el webhook
-  const VERIFY_TOKEN = "pastelito_verify";
+  const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("✅ Webhook verificado correctamente");
     return res.status(200).send(challenge);
-  } else {
-    console.log("❌ Error de verificación del webhook");
-    return res.sendStatus(403);
   }
+
+  console.warn("❌ Falló la verificación del webhook");
+  return res.sendStatus(403);
 });
 
-// ------------------------------------------------------
-// 📩 WEBHOOK DE MENSAJES (POST)
-// ------------------------------------------------------
+// Recepción de mensajes (Meta llama con POST)
 app.post("/webhook", async (req, res) => {
   try {
-    const entry = req.body.entry?.[0]?.changes?.[0]?.value;
-    const message = entry?.messages?.[0];
+    const body = req.body;
 
-    if (!message) {
+    // Meta manda todo en entry > changes > value > messages
+    const entry = body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+    const messages = value?.messages;
+
+    if (!messages || messages.length === 0) {
+      // No hay mensaje de usuario (pueden ser status, etc.)
       return res.sendStatus(200);
     }
 
-    const from = message.from; // número del cliente (formato WhatsApp)
-    const text = (message.text?.body || "").toLowerCase();
+    const message = messages[0];
+    const from = message.from; // número del cliente
 
-    console.log("📩 Mensaje recibido de", from, "->", text);
-
-    // Si el cliente dice algo tipo "hola", "menu", "menú", "buenas", etc.
-    if (/hola|menu|menú|buenas|hey|quiero/i.test(text)) {
-      await sendMenu(from);
-    } else {
-      // Respuesta básica por si escriben cualquier otra cosa
-      await sendText(
-        from,
-        "🌈✨ Soy Pastelito High.\nEscríbeme *hola* o *menú* y te muestro todo lo que hay pa’ el viaje 🚀."
-      );
+    // Solo respondemos a mensajes de usuario, no a mensajes del sistema, etc.
+    if (message.type === "text" || message.type === "interactive") {
+      await handleIncomingMessage(message, from);
     }
 
+    // Siempre responder 200 rápido para que Meta quede feliz
     res.sendStatus(200);
   } catch (error) {
-    console.error("❌ Error en el webhook:", error.response?.data || error);
+    console.error("❌ Error procesando webhook:", error);
     res.sendStatus(500);
   }
 });
 
-// ------------------------------------------------------
-// 🧩 FUNCIÓN: enviar solo texto
-// ------------------------------------------------------
-async function sendText(to, body) {
-  try {
-    await axios.post(
-      `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  } catch (error) {
-    console.error("❌ Error enviando texto:", error.response?.data || error);
-  }
-}
+// Endpoint simple para probar que el servidor está vivo
+app.get("/", (req, res) => {
+  res.send("Pastelito High WhatsApp bot está vivo 💚");
+});
 
-// ------------------------------------------------------
-// 📸 FUNCIÓN: enviar el MENÚ (IMAGEN + TEXTO EXPLICATIVO)
-// ------------------------------------------------------
-async function sendMenu(to) {
-  try {
-    // 1️⃣ Enviar la imagen del menú con un caption corto
-    await axios.post(
-      `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "image",
-        image: {
-          link: IMAGE_MENU_URL,
-          caption:
-            "💫 *Menú del Viaje – Candy Shop 420* 💫\nAquí tienes todas nuestras delicias con truco pa’ elevar el mood 🧁✨",
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    // 2️⃣ Enviar mensaje con info de pagos, envíos y cierre de venta
-    const info =
-      "💚 *Gracias por pasar al rincón más dulce del viaje* 💚\n\n" +
-      "Formas de pago:\n" +
-      "• 🔵 Nequi\n" +
-      "• 💳 Transferencia bancaria\n" +
-      "• 🛵 Pago contra entrega (Bogotá, según zona)\n\n" +
-      "Envíos:\n" +
-      "• 🚀 Mismo día en varias zonas de Bogotá\n" +
-      "• 📦 Envíos nacionales por transportadora\n\n" +
-      "Si ya viste el menú, dime qué se te antoja y te ayudo a armar el combo perfecto pa’ tu viaje 😋🚀";
-
-    await sendText(to, info);
-  } catch (error) {
-    console.error("❌ Error enviando menú:", error.response?.data || error);
-  }
-}
-
-// ------------------------------------------------------
-// 🚀 LEVANTAR SERVIDOR (Render usa PORT)
-// ------------------------------------------------------
-const PORT = process.env.PORT || 3000;
+// -------------------- inicio del servidor --------------------
 app.listen(PORT, () => {
-  console.log(`✅ Pastelito bot corriendo en puerto ${PORT}`);
+  console.log(`🚀 Pastelito bot escuchando en el puerto ${PORT}`);
 });
