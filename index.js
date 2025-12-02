@@ -15,8 +15,7 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 // Token de acceso de la API de WhatsApp (el que te dio Meta)
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 
-// ID del número de WhatsApp (el "Identificador de número de teléfono" que viste en Meta,
-// por ahora el de PRUEBA, más adelante lo cambias por el de tu número real desde Render)
+// ID del número de WhatsApp (el "Identificador de número de teléfono" que viste en Meta)
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 // URL de la imagen del menú
@@ -26,7 +25,6 @@ const MENU_IMAGE_URL = "https://i.imgur.com/RPp27bH.jpeg";
 const app = express();
 app.use(express.json());
 
-// -------------------- helper para enviar mensajes --------------------
 // -------------------- textos base para el bot --------------------
 
 // Texto de bienvenida general
@@ -38,7 +36,7 @@ const WELCOME_TEXT =
   "• Recomendarte combos según tu vuelo y presupuesto 😏\n" +
   "• Explicarte las opciones de pago y envío 💸🚚\n\n" +
   "Respóndeme con lo que buscas, por ejemplo:\n" +
-  "» *“Menú”* · *“Promos”* · *“Combos”* · *“Envíos”* · *“Pago”* · *“Contra entrega”*.";
+  "» *\"Menú\"* · *\"Promos\"* · *\"Combos\"* · *\"Envíos\"* · *\"Pago\"* · *\"Contra entrega\"*.";
 
 // Texto sobre opciones de envío (3 formas)
 const ENVIOS_DETALLE =
@@ -70,7 +68,7 @@ const CONTRA_ENTREGA_DETALLE =
   "Ejemplo: el 5% de 45k = 2.400.\n\n" +
   "Compárteme tu dirección de entrega y te digo costo de envío y tiempo estimado de llegada 🕒";
 
-// Versión Bogotá que tú usas mucho
+// Versión Bogotá específica (por si la quieres usar luego)
 const CONTRA_ENTREGA_BOGOTA =
   "📦 *Pago contra entrega Bogotá (Interrapidísimo)*\n\n" +
   "Pedido mínimo de *45k* + el *5%* del valor del pedido + valor del envío.\n" +
@@ -95,9 +93,10 @@ const PAGO_LISTONES =
   "@PLATA3027102711\n\n" +
   "Recuerda: solo el valor del producto, el valor del domi lo cancelas en casa al recibir 🙌";
 
+// -------------------- helper para enviar mensajes --------------------
 async function sendWhatsApp(payload) {
   try {
-    const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+    const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
 
     await axios.post(url, payload, {
       headers: {
@@ -120,54 +119,151 @@ async function sendWhatsApp(payload) {
 
 // -------------------- lógica de respuesta --------------------
 async function handleIncomingMessage(message, from) {
-  const text = message.text?.body?.toLowerCase() || "";
+  const textRaw =
+    message.text?.body ||
+    message.interactive?.text?.body ||
+    "";
+  const text = textRaw.toLowerCase().trim();
 
-  console.log("📩 Mensaje recibido de", from, "=>", text);
+  console.log("📩 Mensaje recibido de", from, "=>", textRaw);
 
-  // Por ahora: cualquier cosa que escriban, les mandamos bienvenida + menú
-  // Luego le metemos más lógica (pedidos, pagos, etc.)
+  // 1) Info de envíos
+  if (
+    text.includes("envio") ||
+    text.includes("envío") ||
+    text.includes("domicilio") ||
+    text.includes("domi") ||
+    text.includes("interrapidisimo") ||
+    text.includes("interrapidísimo")
+  ) {
+    const msg = {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "text",
+      text: { body: ENVIOS_DETALLE },
+    };
+    await sendWhatsApp(msg);
+    return;
+  }
 
-  // 1) Imagen del menú con copy de Pastelito
-  const imageMessage = {
-    messaging_product: "whatsapp",
-    to: from,
-    type: "image",
-    image: {
-      link: MENU_IMAGE_URL,
-      caption:
-        "💚 Aquí te dejo el menú actualizado de nuestros antojitos con truco 🌈\n" +
-        "Hay pa’ todos los gustos y niveles de vuelo 🚀\n\n" +
-        "Revísalo con calma y dime qué se te antoja… que yo te ayudo a armar el combo perfecto pa’ tu viaje 🧁🍬🍪💨\n" +
-        "¡Pastelito High te guía! 😋💫",
-    },
-  };
+  // 2) Contra entrega explícito
+  if (text.includes("contra entrega") || text.includes("contraentrega")) {
+    const msg = {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "text",
+      text: { body: CONTRA_ENTREGA_DETALLE },
+    };
+    await sendWhatsApp(msg);
+    return;
+  }
 
-  // 2) Mensaje de bienvenida + instrucciones básicas (se puede mejorar después)
-  const welcomeText =
-    "🌈✨ Bienvenid@ al rincón más dulce del viaje, soy Pastelito High 🍪💨.\n" +
-    "Aquí todo está listo pa’ endulzarte la vida y llevarte a otro nivel 🚀.\n\n" +
-    "👉 *Cómo funciona esto:*\n" +
-    "1️⃣ Me dices qué se te antoja del menú (por nombre del producto).\n" +
-    "2️⃣ Te ayudo a armar combo según tu vuelo y presupuesto.\n" +
-    "3️⃣ Te confirmo total, forma de pago y envío.\n\n" +
-    "💸 *Pagos:*\n" +
-    "- Nequi\n" +
-    "- Transferencias a otros bancos (según lo que tengamos activo)\n\n" +
-    "🚚 *Envíos:* Bogotá por app de domicilios (te digo el valor según tu dirección). " +
-    "Contraentrega la manejamos solo en algunos puntos y horarios especiales.\n\n" +
-    "Cuando quieras, respóndeme con lo que se te antoja y lo vamos armando 🍬";
+  // 3) Pago / llave / métodos de pago
+  if (
+    text.includes("pago") ||
+    text.includes("pagar") ||
+    text.includes("llave") ||
+    text.includes("bre-b") ||
+    text.includes("breb") ||
+    text.includes("daviplata") ||
+    text.includes("nequi")
+  ) {
+    const msg = {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "text",
+      text: { body: PAGO_LLAVE },
+    };
+    await sendWhatsApp(msg);
+    return;
+  }
 
-  const textMessage = {
+  // 4) Menú / promos / combos
+  if (
+    text.includes("menu") ||
+    text.includes("menú") ||
+    text.includes("carta") ||
+    text.includes("promo") ||
+    text.includes("promos") ||
+    text.includes("combo") ||
+    text.includes("combos")
+  ) {
+    // primero saludo / explicación
+    const textMessage = {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "text",
+      text: { body: WELCOME_TEXT },
+    };
+
+    const imageMessage = {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "image",
+      image: {
+        link: MENU_IMAGE_URL,
+        caption:
+          "💚 Aquí te dejo el menú actualizado de nuestros antojitos con truco 🌈\n" +
+          "Hay promos, combos y opciones para todos los niveles de vuelo 🚀\n\n" +
+          "Dime qué se te antoja o cuánto presupuesto tienes y te armo algo bien sabroso 😏",
+      },
+    };
+
+    await sendWhatsApp(textMessage); // saludo primero
+    await sendWhatsApp(imageMessage); // menú después
+    return;
+  }
+
+  // 5) Saludos básicos (primer contacto)
+  if (
+    text === "hola" ||
+    text.startsWith("buenas") ||
+    text.includes("que hubo") ||
+    text.includes("q hubo") ||
+    text.includes("holi")
+  ) {
+    const textMessage = {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "text",
+      text: { body: WELCOME_TEXT },
+    };
+
+    const imageMessage = {
+      messaging_product: "whatsapp",
+      to: from,
+      type: "image",
+      image: {
+        link: MENU_IMAGE_URL,
+        caption:
+          "🧁 Este es el menú base del viaje.\n" +
+          "Además suelo tener promos y combos activos, así que si quieres dime *\"promos\"* o cuéntame tu presupuesto y te ayudo a elegir 🤝",
+      },
+    };
+
+    await sendWhatsApp(textMessage); // saludo primero
+    await sendWhatsApp(imageMessage);
+    return;
+  }
+
+  // 6) Default: cualquier otra cosa
+  const defaultMessage = {
     messaging_product: "whatsapp",
     to: from,
     type: "text",
     text: {
-      body: welcomeText,
+      body:
+        "✨ Te leo, pero necesito entenderte mejor.\n\n" +
+        "Puedes decirme por ejemplo:\n" +
+        "• *\"Menú\"* para ver productos\n" +
+        "• *\"Promos\"* o *\"Combos\"* para ver ofertas\n" +
+        "• *\"Envíos\"* para saber cómo te llega el pedido\n" +
+        "• *\"Pago\"* o *\"Llave\"* para detalles de pago\n\n" +
+        "Y si ya tienes algo en mente, cuéntame qué producto y cuántas unidades se te antojan 😋",
     },
   };
 
-  await sendWhatsApp(imageMessage);
-  await sendWhatsApp(textMessage);
+  await sendWhatsApp(defaultMessage);
 }
 
 // -------------------- endpoints del webhook --------------------
