@@ -11,6 +11,13 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
+// 🔎 DEBUG SOLO PARA PROBAR EL TOKEN (puedes borrarlo después)
+console.log(
+  "🚦 DEBUG WHATSAPP_TOKEN prefix:",
+  (WHATSAPP_TOKEN || "").slice(0, 30)
+);
+
+
 // -------------------- URLs de imágenes --------------------
 const MENU_IMAGE_URL = "https://i.imgur.com/RPp27bH.jpeg";          // Menú general
 const BREB_IMAGE_URL = "https://i.imgur.com/cNiomJA.jpeg";          // Imagen pago por llave Bre-B / DaviPlata
