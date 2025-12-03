@@ -490,7 +490,6 @@ function detectIntent(text) {
     t.includes("mg") ||
     t.includes("miligramos") ||
     t.includes("dosis")
-    t.includes("cuanto tiene")
     t.includes("cuanto trae")
   ) {
     return { type: "CONCENTRACION" };
